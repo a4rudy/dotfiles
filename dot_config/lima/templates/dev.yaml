@@ -1,0 +1,203 @@
+# Lima instance identity and Debian guest account.
+minimumLimaVersion: 2.0.0
+user:
+  name: "dev"
+  home: "/home/dev"
+base:
+  - template:_images/debian-12
+
+# Small Apple Silicon development VM sizing.
+arch: aarch64
+vmType: vz
+cpus: 4
+memory: "1GiB"
+disk: "20GiB"
+
+# Share the workspace read/write; expose host configuration and credentials read-only.
+mounts:
+  - location: "~/workspace"
+    mountPoint: "/workspace"
+    writable: true
+  - location: "~/.local/share"
+    mountPoint: "/mnt/local-share"
+    writable: false
+  - location: "~/.local/bin"
+    mountPoint: "/mnt/local-bin"
+    writable: false
+  - location: "~/.config"
+    mountPoint: "/mnt/config"
+    writable: false
+  - location: "~/.local/credentials"
+    mountPoint: "/mnt/credentials"
+    writable: false
+
+# Bootstrap packages, the dev account, local tool caches, dotfiles and services as root.
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        zsh \
+        nodejs \
+        npm \
+        python3 \
+        python3-pip \
+        docker.io \
+        docker-compose \
+        sudo \
+        unzip
+
+      if ! id dev >/dev/null 2>&1; then
+        useradd --create-home --shell /bin/bash --groups sudo dev
+      fi
+      usermod -aG docker dev
+      if [ "$(getent passwd dev | cut -d: -f7)" != /usr/bin/zsh ]; then
+        chsh -s /usr/bin/zsh dev
+      fi
+
+      install -d -m 0700 -o dev -g dev /home/dev/.ssh
+      printf '%s\n' 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev
+      chmod 0440 /etc/sudoers.d/dev
+
+      install -d -m 0755 /usr/share/keyrings
+      curl -fsSL \
+        https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg \
+        -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+      curl -fsSL \
+        https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list \
+        -o /etc/apt/sources.list.d/tailscale.list
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y tailscale
+      systemctl enable --now docker tailscaled
+      # Create guest-local state and writable Go/chezmoi caches; do not use host caches.
+      install -d -m 0755 \
+        /etc/profile.d \
+        /usr/local/bin \
+        /home/dev/.config/herdr \
+        /home/dev/.config/chezmoi \
+        /etc/herdr
+      install -d -m 0755 -o dev -g dev \
+        /home/dev/.local/bin \
+        /home/dev/.cache \
+        /home/dev/.cache/chezmoi-src \
+        /home/dev/.cache/go-build \
+        /home/dev/.cache/bun-cache \
+        /home/dev/.cache/chezmoi-git \
+        /home/dev/.cache/gomod \
+        /home/dev/.cache/gocache \
+        /home/dev/.cache/tmp \
+        /home/dev/.bun/bin \
+        /home/dev/.local/share/crush
+      chown -R dev:dev \
+        /home/dev/.config/herdr \
+        /home/dev/.config/chezmoi \
+        /home/dev/.cache \
+        /home/dev/.local/share/crush
+
+      cat > /etc/profile.d/go-path.sh <<'EOF'
+      export PATH=/usr/local/go/bin:/home/dev/.local/bin:/home/dev/.bun/bin:$PATH
+      export GOPRIVATE='*'
+      export GOPATH=/home/dev/go
+      export GOMODCACHE=/home/dev/.cache/gomod
+      export GOCACHE=/home/dev/.cache/gocache
+      export TMPDIR=/home/dev/.cache/tmp
+      export GOTOOLCHAIN=local
+      EOF
+      cat > /etc/zsh/zshenv <<'EOF'
+      export PATH=/usr/local/go/bin:/home/dev/.local/bin:/home/dev/.bun/bin:$PATH
+      export GOPRIVATE='*'
+      export GOPATH=/home/dev/go
+      export GOMODCACHE=/home/dev/.cache/gomod
+      export GOCACHE=/home/dev/.cache/gocache
+      export TMPDIR=/home/dev/.cache/tmp
+      export GOTOOLCHAIN=local
+      EOF
+
+      # Reuse only the selected Crush settings file from the read-only host share.
+      if [ -f /mnt/local-share/crush/crush.json ]; then
+        ln -sfn /mnt/local-share/crush/crush.json \
+          /home/dev/.local/share/crush/crush.json
+      fi
+
+      sudo -u dev -H env HOME=/home/dev PATH="/home/dev/.local/bin:/usr/bin:/bin" sh -c 'curl -fsLS https://get.herdr.dev | sh'
+
+      # Read secrets from the host-mounted JSON and keep the guest copy root-only.
+      python3 -c 'import json; d=json.load(open("/mnt/credentials/devcontainer.json")); assert d.get("GH_TOKEN") and d.get("TAILSCALE_AUTH_KEY"); open("/etc/herdr/credentials.env", "w").write("GH_TOKEN=" + d["GH_TOKEN"] + "\nTAILSCALE_AUTH_KEY=" + d["TAILSCALE_AUTH_KEY"] + "\n")'
+      chmod 0600 /etc/herdr/credentials.env
+      set -a
+      . /etc/herdr/credentials.env
+      set +a
+      tailscale up \
+        --auth-key="$TAILSCALE_AUTH_KEY" \
+        --ssh \
+        --accept-dns=false \
+        --hostname=wedding
+
+      # Install and apply the requested dotfiles under the dev account.
+      sudo -u dev -H env HOME=/home/dev \
+        sh -c 'curl -fsLS https://get.chezmoi.io | sh -s -- -b /home/dev/.local/bin'
+      sudo -u dev -H env \
+        HOME=/home/dev \
+        PATH="/usr/local/go/bin:/home/dev/.local/bin:/usr/bin:/bin" \
+        GOPATH=/home/dev/go \
+        GOMODCACHE=/home/dev/.cache/gomod \
+        GOCACHE=/home/dev/.cache/gocache \
+        TMPDIR=/home/dev/.cache/tmp \
+        GOBIN=/home/dev/.local/bin \
+        /usr/local/go/bin/go install golang.org/x/tools/gopls@v0.23.0
+      if [ ! -d /home/dev/.cache/chezmoi-src/repo/.git ]; then
+        sudo -u dev -H env \
+          HOME=/home/dev \
+          PATH="/home/dev/.local/bin:/usr/local/go/bin:/usr/bin:/bin" \
+          GOMODCACHE=/home/dev/.cache/gomod \
+          GOCACHE=/home/dev/.cache/gocache \
+          TMPDIR=/home/dev/.cache/tmp \
+          git clone https://github.com/fighterjock/dotfiles.git \
+            /home/dev/.cache/chezmoi-src/repo
+      fi
+      if [ -f /home/dev/.cache/chezmoi-src/repo/run_once_install-shell-tools.sh ]; then
+        sed -i \
+          -e 's|sh -c "$(curl -fsSL https://starship.rs/install.sh)" -- -b "$HOME/.local/bin"|sh -c "$(curl -fsSL https://starship.rs/install.sh)" -- -b "$HOME/.local/bin" --yes|' \
+          /home/dev/.cache/chezmoi-src/repo/run_once_install-shell-tools.sh
+      fi
+      # Bun is needed to build the Herdr Sessionizer plugin during apply.
+      if [ ! -x /home/dev/.bun/bin/bun ]; then
+        sudo -u dev -H env HOME=/home/dev BUN_INSTALL=/home/dev/.bun BUN_INSTALL_CACHE_DIR=/home/dev/.cache/bun-cache PATH=/home/dev/.bun/bin:/usr/bin:/bin \
+          sh -c 'curl -fsSL https://bun.sh/install | bash'
+      fi
+      sudo -u dev -H env \
+        HOME=/home/dev \
+        PATH="/home/dev/.bun/bin:/home/dev/.local/bin:/usr/local/go/bin:/usr/bin:/bin" \
+        GOPATH=/home/dev/go \
+        GOMODCACHE=/home/dev/.cache/gomod \
+        GOCACHE=/home/dev/.cache/gocache \
+        TMPDIR=/home/dev/.cache/tmp \
+        chezmoi --source=/home/dev/.cache/chezmoi-src/repo init --apply --force
+
+      # Keep the headless Herdr server running across guest restarts.
+      install -d -m 0755 /etc/systemd/system
+      cat > /etc/systemd/system/herdr.service <<'EOF'
+      [Unit]
+      Description=Herdr headless server
+      After=network-online.target tailscaled.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=dev
+      WorkingDirectory=/home/dev
+      ExecStart=/home/dev/.local/bin/herdr server
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+      systemctl daemon-reload
+      systemctl enable --now herdr.service
