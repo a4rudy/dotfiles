@@ -75,6 +75,16 @@ provision:
       apt-get update
       DEBIAN_FRONTEND=noninteractive apt-get install -y tailscale
       systemctl enable --now docker tailscaled
+
+      # Install a toolchain new enough for the dotfiles' current gopls module.
+      if [ ! -x /usr/local/go/bin/go ] || ! /usr/local/go/bin/go version | grep -q 'go1.27.1'; then
+        curl -fsSL https://go.dev/dl/go1.27.1.linux-arm64.tar.gz \
+          -o /tmp/go1.27.1.linux-arm64.tar.gz
+        rm -rf /usr/local/go
+        tar -C /usr/local -xzf /tmp/go1.27.1.linux-arm64.tar.gz
+        rm -f /tmp/go1.27.1.linux-arm64.tar.gz
+      fi
+
       # Create guest-local state and writable Go/chezmoi caches; do not use host caches.
       install -d -m 0755 \
         /etc/profile.d \
@@ -137,7 +147,7 @@ provision:
         --auth-key="$TAILSCALE_AUTH_KEY" \
         --ssh \
         --accept-dns=false \
-        --hostname=wedding
+        --hostname='{{.Name}}'
 
       # Install and apply the requested dotfiles under the dev account.
       sudo -u dev -H env HOME=/home/dev \

@@ -30,6 +30,7 @@ repo only.
 `run_once_install-shell-tools.sh` runs during the first `chezmoi apply` and
 installs, via curl only (no package manager):
 
+- Crush (installed with Go into `~/.local/bin`)
 - starship (prompt)
 - fzf (ctrl-R history, ctrl-T files)
 - zsh-autosuggestions and zsh-syntax-highlighting into `~/.zsh/plugins/`

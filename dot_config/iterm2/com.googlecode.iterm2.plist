@@ -7,7 +7,9 @@
 	<key>Default Bookmark Guid</key>
 	<string>9D30F9D2-CABB-425A-BA75-CCE4DF7D4941</string>
 	<key>Default Browser Profile Guid</key>
-	<string>810DF19D-2D79-4761-8FA1-207318A5B1CE</string>
+	<string>9D30F9D2-CABB-425A-BA75-CCE4DF7D4941</string>
+	<key>EnableDivisionView</key>
+	<false/>
 	<key>GlobalKeyMap</key>
 	<dict>
 		<key>0x19-0x60000</key>
@@ -110,6 +112,8 @@
 		</dict>
 	</dict>
 	<key>HapticFeedbackForEsc</key>
+	<false/>
+	<key>HideScrollbar</key>
 	<false/>
 	<key>HotkeyMigratedFromSingleToMulti</key>
 	<true/>
@@ -876,7 +880,7 @@
 			<key>Columns</key>
 			<integer>80</integer>
 			<key>Command</key>
-			<string>zsh -c "herdr; exec zsh"</string>
+			<string>/bin/zsh -c 'herdr'</string>
 			<key>Cursor Color</key>
 			<dict>
 				<key>Alpha Component</key>
@@ -1317,6 +1321,8 @@
 			<true/>
 			<key>Use Bright Bold</key>
 			<true/>
+			<key>Use Custom Tab Title</key>
+			<false/>
 			<key>Use Italic Font</key>
 			<true/>
 			<key>Use Non-ASCII Font</key>
@@ -1335,6 +1341,12 @@
 			<string>/Users/rudreshamin</string>
 		</dict>
 	</array>
+	<key>OpenArrangementAtStartup</key>
+	<false/>
+	<key>OpenBookmark</key>
+	<false/>
+	<key>OpenNoWindowsAtStartup</key>
+	<false/>
 	<key>OpenTmuxWindowsIn</key>
 	<integer>2</integer>
 	<key>PointerActions</key>
@@ -1370,11 +1382,17 @@
 			<string>kNextWindowPointerAction</string>
 		</dict>
 	</dict>
+	<key>RestoreWindowsToSameSpaces</key>
+	<true/>
 	<key>SoundForEsc</key>
 	<false/>
 	<key>SwitchTabModifier</key>
 	<integer>9</integer>
+	<key>TabStyleWithAutomaticOption</key>
+	<integer>5</integer>
 	<key>VisualIndicatorForEsc</key>
+	<false/>
+	<key>WindowNumber</key>
 	<false/>
 </dict>
 </plist>

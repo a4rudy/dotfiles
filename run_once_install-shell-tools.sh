@@ -17,6 +17,17 @@ esac
 
 mkdir -p "$HOME/.local/bin" "$HOME/.zsh/plugins"
 
+if [ ! -x "$HOME/.local/bin/crush" ]; then
+  echo "installing crush"
+  if ! command -v go >/dev/null 2>&1; then
+    echo "Go is required to install Crush" >&2
+    exit 1
+  fi
+  GOBIN="$HOME/.local/bin" go install github.com/charmbracelet/crush@latest
+else
+  echo "crush already installed"
+fi
+
 if [ ! -x "$HOME/.local/bin/glow" ]; then
   echo "installing glow"
   TAG="$(curl -fsSL https://api.github.com/repos/charmbracelet/glow/releases/latest \
