@@ -11,6 +11,16 @@ case ":$PATH:" in
   *) export PATH="$HOME/.bun/bin:$PATH" ;;
 esac
 
+if [[ "$OSTYPE" == darwin* ]]; then
+  limactl() {
+    if [[ "$1" == shell && "$*" != *"--workdir"* ]]; then
+      command limactl shell --workdir /home/dev "${@:2}"
+    else
+      command limactl "$@"
+    fi
+  }
+fi
+
 cs() {
   cd "$@" && ls
 }

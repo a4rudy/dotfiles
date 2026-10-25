@@ -144,6 +144,14 @@ provision:
         TMPDIR=/home/dev/.cache/tmp \
         GOBIN=/home/dev/.local/bin \
         /usr/local/go/bin/go install golang.org/x/tools/gopls@v0.23.0
+      if [ ! -x /home/dev/.local/bin/crush ]; then
+        curl -fsSL https://github.com/charmbracelet/crush/releases/download/v0.98.2/crush_0.98.2_Linux_arm64.tar.gz \
+          -o /tmp/crush.tar.gz
+        tar -xzf /tmp/crush.tar.gz -C /tmp --strip-components=1 crush_0.98.2_Linux_arm64/crush
+        install -m 0755 /tmp/crush /home/dev/.local/bin/crush
+        rm -f /tmp/crush /tmp/crush.tar.gz
+        chown dev:dev /home/dev/.local/bin/crush
+      fi
       if [ ! -d /home/dev/.cache/chezmoi-src/repo/.git ]; then
         sudo -u dev -H env \
           HOME=/home/dev \
