@@ -25,6 +25,28 @@ cs() {
   cd "$@" && ls
 }
 
+if [[ "$OSTYPE" == darwin* ]]; then
+  lima_remove() {
+    if (( $# != 1 )); then
+      print -u2 "Usage: lima_remove INSTANCE"
+      return 2
+    fi
+
+    local instance="$1"
+    local machines machine_id
+
+    machines="$(herdr machine list --json)" || return
+    machine_id="$(print -r -- "$machines" | command jq -r --arg instance "$instance" '.[] | select(.label == $instance or .target == ("lima-" + $instance)) | .id' | head -n 1)" || return
+
+    limactl stop "$instance" || return
+    limactl remove "$instance" || return
+
+    if [[ -n "$machine_id" ]]; then
+      herdr machine remove "$machine_id" || return
+    fi
+  }
+fi
+
 if [ -x "$HOME/.local/bin/fzf" ]; then
   source <("$HOME/.local/bin/fzf" --zsh)
 fi
