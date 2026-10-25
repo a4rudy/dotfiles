@@ -65,16 +65,7 @@ provision:
       printf '%s\n' 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev
       chmod 0440 /etc/sudoers.d/dev
 
-      install -d -m 0755 /usr/share/keyrings
-      curl -fsSL \
-        https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg \
-        -o /usr/share/keyrings/tailscale-archive-keyring.gpg
-      curl -fsSL \
-        https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list \
-        -o /etc/apt/sources.list.d/tailscale.list
-      apt-get update
-      DEBIAN_FRONTEND=noninteractive apt-get install -y tailscale
-      systemctl enable --now docker tailscaled
+      systemctl enable --now docker
 
       # Install a toolchain new enough for the dotfiles' current gopls module.
       if [ ! -x /usr/local/go/bin/go ] || ! /usr/local/go/bin/go version | grep -q 'go1.27.1'; then
@@ -137,17 +128,9 @@ provision:
 
       sudo -u dev -H env HOME=/home/dev PATH="/home/dev/.local/bin:/usr/bin:/bin" sh -c 'curl -fsLS https://get.herdr.dev | sh'
 
-      # Read secrets from the host-mounted JSON and keep the guest copy root-only.
-      python3 -c 'import json; d=json.load(open("/mnt/credentials/devcontainer.json")); assert d.get("GH_TOKEN") and d.get("TAILSCALE_AUTH_KEY"); open("/etc/herdr/credentials.env", "w").write("GH_TOKEN=" + d["GH_TOKEN"] + "\nTAILSCALE_AUTH_KEY=" + d["TAILSCALE_AUTH_KEY"] + "\n")'
+      # Read the GitHub token from the host-mounted JSON and keep the guest copy root-only.
+      python3 -c 'import json; d=json.load(open("/mnt/credentials/devcontainer.json")); assert d.get("GH_TOKEN"); open("/etc/herdr/credentials.env", "w").write("GH_TOKEN=" + d["GH_TOKEN"] + "\n")'
       chmod 0600 /etc/herdr/credentials.env
-      set -a
-      . /etc/herdr/credentials.env
-      set +a
-      tailscale up \
-        --auth-key="$TAILSCALE_AUTH_KEY" \
-        --ssh \
-        --accept-dns=false \
-        --hostname='{{.Name}}'
 
       # Install and apply the requested dotfiles under the dev account.
       sudo -u dev -H env HOME=/home/dev \
@@ -195,7 +178,7 @@ provision:
       cat > /etc/systemd/system/herdr.service <<'EOF'
       [Unit]
       Description=Herdr headless server
-      After=network-online.target tailscaled.service
+      After=network-online.target
       Wants=network-online.target
 
       [Service]
