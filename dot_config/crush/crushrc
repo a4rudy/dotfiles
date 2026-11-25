@@ -6,3 +6,11 @@ option attribution-generated-with false
 
 # Language servers are per-project: define gopls (or others) in each project's
 # .crushrc so they only load where they apply.
+
+option skill-path "$HOME/.config/crush/skills"
+
+mkdir -p "$HOME/.config/crush/skills/hunk-review"
+hunk_skill_path="$(hunk skill path hunk-review)"
+if [ -n "$hunk_skill_path" ] && [ -f "$hunk_skill_path" ]; then
+  ln -sf "$hunk_skill_path" "$HOME/.config/crush/skills/hunk-review/SKILL.md"
+fi
